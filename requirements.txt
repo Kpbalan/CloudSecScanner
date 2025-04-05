@@ -1,0 +1,14 @@
+google
+google-cloud
+google-cloud-storage
+google-cloud-compute
+google-cloud-bigquery
+google-cloud-container
+google-cloud-dlp
+kubernetes
+pyyaml
+tabulate
+colorama
+fpdf
+matplotlib
+csv
