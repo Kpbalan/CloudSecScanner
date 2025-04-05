@@ -1,3 +1,7 @@
+# Copyright (c) 2025 Krishna Prasad Balan
+#
+# This file is licensed under the MIT License. See the LICENSE file for details.
+
 import os
 
 import matplotlib.pyplot as plt

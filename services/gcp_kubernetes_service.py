@@ -1,8 +1,9 @@
-import base64
+# Copyright (c) 2025 Krishna Prasad Balan
+#
+# This file is licensed under the MIT License. See the LICENSE file for details.
 
 from google.cloud import container_v1
 from google.auth import default
-import requests
 from kubernetes import client, config
 from google.auth.transport.requests import Request
 import os

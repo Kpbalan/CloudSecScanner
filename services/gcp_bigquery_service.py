@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Krishna Prasad Balan
+#
+# This file is licensed under the MIT License. See the LICENSE file for details.
 
 from google.cloud import bigquery
 from google.cloud import dlp_v2

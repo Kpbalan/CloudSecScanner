@@ -3,7 +3,7 @@
 CloudSecScanner is a scanning tool that scans a GCP project for the presence of any misconfigurations.
 It is currently designed to scan GCP components like Google Cloud Storage(GCS), Google BigQuery (GBQ) and
 Google Kubernetes Engine (GKE). This tool uses Google APIs to establish connections and perform scanning on the cloud components.
-Hence it can be made to execute the scan outside the Google project; it need not be installed/deployed within the environment of a google project.
+Hence, it can be made to execute the scan outside the Google project; it need not be installed/deployed within the environment of a google project.
 
 ### Pre-requisites
 

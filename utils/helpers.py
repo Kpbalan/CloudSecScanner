@@ -1,9 +1,8 @@
-#import yaml
-import csv
-import textwrap
+# Copyright (c) 2025 Krishna Prasad Balan
+#
+# This file is licensed under the MIT License. See the LICENSE file for details.
 
-from tabulate import tabulate
-from termcolor import colored
+import csv
 from datetime import datetime
 from fpdf import FPDF
 
@@ -15,8 +14,6 @@ class PDF(FPDF):
         wrapped_height = self.get_y() - y
         if border:
             self.rect(x, y, width, wrapped_height)
-        #self.set_xy(x,y)
-        #self.cell(width, wrapped_height, "", border=border)
         self.set_xy(x + width, y)
         return wrapped_height
 # def display_yaml_table(yaml_file):
