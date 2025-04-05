@@ -3,8 +3,6 @@
 # This file is licensed under the MIT License. See the LICENSE file for details.
 
 from google.cloud import bigquery
-from google.cloud import dlp_v2
-from google.cloud.dlp_v2 import types
 import re
 
 gbq_misconfigs = []
@@ -16,74 +14,24 @@ def query_data():
     for row in results:
         print(row)
 
-
-# def get_iam_permissions(project_id, dataset_id):
-#     # Initialize the BigQuery client
-#     client = bigquery.Client(project=project_id)
-#
-#     # Fetch IAM policy for the dataset
-#     dataset_ref = client.dataset(f"{dataset_id}")
-#     policy = client.get_dataset(dataset_ref).iam_policy()
-#
-#     print(f"Permissions for dataset {dataset_id}:")
-#     for binding in policy.bindings:
-#         print(f"Role: {binding['role']}")
-#         for member in binding['members']:
-#             print(f"  Member: {member}")
-
-
-def scan_bigquery_table(project_id, dataset_id, table_id):
-    # Initialize the DLP client
-    dlp_client = dlp_v2.DlpServiceClient()
-
-    # Define the BigQuery table to scan
-    bigquery_table = types.BigQueryTable(
-        project_id=project_id,
-        dataset_id=dataset_id,
-        table_id=table_id
-    )
-
-    # Configure the inspection job
-    inspect_config = types.InspectConfig(
-        info_types=[
-            {"name": "EMAIL_ADDRESS"},
-            {"name": "PHONE_NUMBER"},
-            {"name": "CREDIT_CARD_NUMBER"}
-        ],
-        include_quote=True
-    )
-
-    storage_config = types.StorageConfig(
-        big_query_options=types.BigQueryOptions(
-            table_reference=bigquery_table
-        )
-    )
-
-    # Create the inspection job
-    parent = f"projects/{project_id}"
-    job = {
-        "inspect_config": inspect_config,
-        "storage_config": storage_config
-    }
-
-    # Run the inspection job
-    response = dlp_client.create_dlp_job(parent=parent, inspect_job=job)
-    print(f"Created DLP job: {response.name}")
-
 def get_dataset_iam_policy(project_id, dataset_id, table_id=None):
     client = bigquery.Client(project=project_id)
-    # resource_path = f'projects/{project_id}/datasets/{dataset_id}'
-    # print(f"Resource path of dataset {resource_path}:")
-
     dataset_ref = bigquery.DatasetReference(project_id, dataset_id)
     policy = client.get_iam_policy(dataset_ref)
-
-    # if table_id:
-    #     resource_path += f'/tables/{table_id}'
-    #
-    # # Get IAM policy
-    # policy = client.get_iam_policy(resource_path)
     return policy
+
+def scan_dataset_accesses(client, dataset_id):
+    dataset_item = client.get_dataset(dataset_id)
+
+    # Check access controls
+    violations = check_dataset_access_controls(dataset_item)
+    if violations:
+        print(f"Public access/Broad permissions in dataset '{dataset_id}':")
+        gbq_misconfigs.append({
+                                  "message": f"Public access/Broad permissions in dataset '{dataset_id}'" + "| Follow Principle of least privileges on BQ resources to minimize risks",
+                                  "criticality": "High"})
+    else:
+        print(f"Dataset '{dataset_id}' complies with CIS security benchmarks!")
 
 def get_table_iam_policy(project_id, dataset_id, table_id):
     client = bigquery.Client(project=project_id)
@@ -130,7 +78,7 @@ def scan_table_for_pii(project_id, dataset_id, table_id):
     client = bigquery.Client()
 
     # Query the table
-    query = f"SELECT * FROM `{project_id}.{dataset_id}.{table_id}` LIMIT 1000"
+    query = f"SELECT * FROM `{project_id}.{dataset_id}.{table_id}` LIMIT 100"
 
 
     query_job = client.query(query)
@@ -156,7 +104,27 @@ def scan_table_for_pii(project_id, dataset_id, table_id):
                 # Print all identified matches for the field
                 if matches:
                     print(f"\033[1;31m Potential PII/PHI/PCI violation in column '{field}' ({', '.join(matches)}): {value} \033[0m")
-                    gbq_misconfigs.append({"message": f"PII/PHI/PCI violation ' ({', '.join(matches)})" +"| Protect/Restrict sensitive data by applying Data masking or column-level security", "criticality": "High"})
+                    gbq_misconfigs.append({"message": f"PII/PHI/PCI violation in '{field}' in table {dataset_id}.{table_id}" +"| Protect/Restrict sensitive data by applying Data masking or column-level security", "criticality": "High"})
+
+
+def check_dataset_access_controls(dataset):
+    violations = []
+
+    # Check each access entry in the dataset's ACLs
+    for entry in dataset.access_entries:
+        role = entry.role
+        entity_type, entity_id = entry.entity_type, entry.entity_id
+
+        # Check for public access
+        if entity_type == "view" or entity_id == "allUsers" or entity_id == "allAuthenticatedUsers":
+            violations.append(f"Dataset {dataset.dataset_id} is publicly accessible!")
+
+        # Warn if broad permissions are granted (e.g., Owner, Editor, or Viewer roles to large groups)
+        if role in ("OWNER", "EDITOR", "READER"):
+            violations.append(
+                f"Dataset {dataset.dataset_id}: Broad role '{role}' assigned to {entity_id} ({entity_type}).")
+
+    return violations
 
 def scan_datasets_and_tables(project_id):
     print("\033[1m\033[34mGOOGLE BIGQUERY -  Scan Results\033[0m")
@@ -169,28 +137,17 @@ def scan_datasets_and_tables(project_id):
     print(f"Datasets in project {project_id}:")
     for dataset in datasets:
         print(f"Dataset: {dataset.dataset_id}")
-        # Fetch IAM permissions for the dataset
-        #get_iam_permissions(project_id, dataset)
-        #dataset_policy = get_iam_policy(project_id, dataset.dataset_id)
-        # dataset_policy = get_dataset_iam_policy(project_id, dataset.dataset_id)
-        # print('Dataset IAM Policy:')
-        # for binding in dataset_policy.bindings:
-        #     print(f'Role: {binding["role"]}')
-        #     for member in binding["members"]:
-        #         print(f' - Member: {member}')
-
+        #scan_dataset_accesses(client, dataset.dataset_id)
         # For each dataset, list tables
         tables = client.list_tables(dataset.dataset_id)
         for table in tables:
             # Fetch IAM permissions for the table
-            #get_table_permissions(project_id, dataset, table)
             table_policy = get_table_iam_policy(project_id, dataset.dataset_id, table.table_id)
             print('\nIAM Policy of Table:' + f'    - \033[1m{table.table_id}\033[0m')
             for binding in table_policy.bindings:
                 print(f'Role: {binding["role"]}')
                 for member in binding["members"]:
                     print(f' - Member: {member}')
-            #scan_bigquery_table(project_id, dataset.dataset_id, table.table_id)
             check_table_encryption_config( client, project_id, dataset.dataset_id, table.table_id)
             check_table_access_controls(project_id, dataset.dataset_id, table.table_id)
             check_table_last_modified(project_id, dataset.dataset_id, table.table_id)

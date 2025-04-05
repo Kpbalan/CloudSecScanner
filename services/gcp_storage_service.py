@@ -61,9 +61,6 @@ def get_bucket_configuration(bucket_name, report_file):
     # Fetch the bucket's ACL
     bucket_acl = bucket.acl
 
-    # Reload ACL to ensure it's up-to-date
-    #bucket_acl.reload()
-
     # Check if Uniform Bucket-Level Access is enabled
     insecure_grants = []
     if bucket.iam_configuration.uniform_bucket_level_access_enabled:
@@ -134,7 +131,7 @@ def get_bucket_configuration(bucket_name, report_file):
         for binding in policy.bindings
     )
     if is_public_access:
-        gcs_misconfigs.append({"message": "Public bucket access for the bucket " +bucket.name +"| Remove Public access(allUsers/allAuthenticatedUsers) to the bucket",
+        gcs_misconfigs.append({"message": "Public bucket access for the bucket {" +bucket.name +"}| Remove Public access(allUsers/allAuthenticatedUsers) to the bucket",
                                "criticality": "Critical"})
     # Check if any role bindings grant access to 'allUsers' or 'allAuthenticatedUsers'
     overly_permissive_role_bindings_arr = [

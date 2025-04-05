@@ -4,6 +4,7 @@
 
 from google.cloud import container_v1
 from google.auth import default
+from google.cloud.devtools.containeranalysis_v1.types import containeranalysis
 from kubernetes import client, config
 from google.auth.transport.requests import Request
 import os
@@ -22,7 +23,6 @@ def get_cluster_credentials(project_id, zone, cluster_name):
     print(f"Cluster Status: {cluster.status}")
     print(f"Cluster Endpoint: {cluster.endpoint}")
     print(f"Cluster Network: {cluster.network}")
-    #print(f"Master Auth: {cluster.master_auth}")
 
     # Return cluster endpoint and authentication details
     return cluster.endpoint, cluster.master_auth
@@ -57,8 +57,6 @@ def check_exposed_services(v1):
             exposed_services.append(f"\033[1;31m Service {service.metadata.name} in namespace {service.metadata.namespace} is exposed via LoadBalancer. \033[0m")
             gke_misconfigs.append({"message": f"Service {service.metadata.name} in namespace {service.metadata.namespace} is exposed via LoadBalancer " +"| Define restrictive role bindings and apply them via Pod security policies",
                                       "criticality": "High"})
-            # print(
-            #     f"Service {service.metadata.name} in namespace {service.metadata.namespace} is exposed via LoadBalancer.")
     return exposed_services
 
 def scan_pods():
@@ -74,33 +72,26 @@ def scan_pods():
     exposed_services_list = {
         'Exposed Services': {exposed_svcs}
     }
-    kube_cluster_config = {
-        # 'cluster_name': {pod.metadata.name},
-        # 'Namespace': {pod.metadata.namespace},
-    }
-    #pods = v1.list_pod_for_all_namespaces(watch=False)
+
     pods = v1.list_namespaced_pod(namespace='default')
     if pods.items:
         for pod in pods.items:
             print(f"Pod Name: {pod.metadata.name}, Namespace: {pod.metadata.namespace}")
             check_missing_resource_limits(pod)
             check_privileged_containers(pod)
-        #     pod_config = {
-        #         'pod_name': {pod.metadata.name},
-        #         'Namespace': {pod.metadata.namespace},
-        #         'storage_class': bucket.storage_class,
-        #         'versioning_enabled': bucket.versioning_enabled,
-        #         'lifecycle_rules': [rule.to_api_repr() for rule in bucket.lifecycle_rules],
-        #         'public_access_enabled': is_public_access,
-        #         'has_overly_permissive_role_bindings': has_overly_permissive_role_bindings,
-        #         'overly_permissive_role_bindings': overly_permissive_role_bindings,
-        #         'encryption_type': encryption_type,
-        #         'kms_key': kms_key,
-        #         'ACL_access_type': access_type,
-        #         'insecure_access_control_grants': insecure_grants
-        #     }
 
+def scan_unpatched_vuln_occurences(project_id):
+    client = containeranalysis.ContainerAnalysisClient()
 
+    filter_expression = 'kind="VULNERABILITY"'
+    parent = f"projects/{project_id}"
+
+    occurrences = client.list_occurrences(parent=parent, filter=filter_expression)
+
+    for occurrence in occurrences:
+        print(f"Vulnerability: {occurrence.note_name}")
+        print(f"Severity: {occurrence.vulnerability.effective_severity}")
+        print(f"Description: {occurrence.vulnerability.short_description}")
 
 def check_cluster_role_bindings():
     # Load kubeconfig
@@ -133,10 +124,6 @@ def check_cluster_role_bindings():
             for subject in binding.subjects:
                 print(f" - Subject Kind: {subject.kind}, Name: {subject.name}, Namespace: {subject.namespace if subject.namespace else 'N/A'}")
 
-                # Flag service accounts or groups with potentially excessive privileges
-                # if subject.kind == "ServiceAccount":
-                #     print(f"\033[1;31m   * Warning: ServiceAccount '{subject.name}' bound to high-privilege role '{role_ref.name}'.\033[0m")
-
                 if subject.kind == "Group" and subject.name == "system:masters":
                     print(f"\033[1;31m   * Warning: The 'system:masters' group has cluster-wide administrative access.\033[0m")
                     gke_misconfigs.append({"message": "The 'system:masters' group has cluster-wide administrative access " +"| Remove broad grants/permissions from the group", "criticality": "Medium"})
@@ -154,22 +141,15 @@ def scan_kubernetes_clusters(credentials, project_id, location, report_file_path
     # Initialize the client for the Container API
     client = container_v1.ClusterManagerClient(credentials=credentials)
 
+    #scan_unpatched_vuln_occurences(project_id)
+
     # List clusters in the specified project and location
     clusters = client.list_clusters(project_id=project_id, zone=location)
 
     check_cluster_role_bindings()
 
     for cluster in clusters.clusters:
-        # print(f"Cluster Name: {cluster.name}")
-        # print(f"Cluster Id: {cluster.id}")
-        # print(f"Zone: {cluster.location}")
-        # print(f"Kubernetes Version: {cluster.current_master_version}")
-        # print("-" * 40)
-        #get_cluster_credentials(project_id, cluster.location, cluster.id)
-        # Get cluster credentials
         endpoint, master_auth = get_cluster_credentials(project_id, cluster.location, cluster.name)
-        #print(f"Endpoint: {endpoint}")
-        #print(f"Master Auth: {master_auth}")
         # Configure Kubernetes client
         configure_kubernetes_client(endpoint, master_auth)
         scan_pods()

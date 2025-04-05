@@ -3,7 +3,8 @@
 # This file is licensed under the MIT License. See the LICENSE file for details.
 
 import os
-
+import time
+import json
 import matplotlib.pyplot as plt
 import pandas as pd
 from google.oauth2 import service_account
@@ -11,9 +12,7 @@ from google.oauth2 import service_account
 from services import gcp_storage_service, gcp_kubernetes_service, gcp_bigquery_service
 from utils.helpers import scan_file_pdf_converter, capture_misconfigs_trend_to_csv
 
-# Set the path to your Google Cloud service account key
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "credentials.json"
-os.environ["GOOGLE_CLOUD_PROJECT"] = "capstone-test-project-450805"
 credentials = service_account.Credentials.from_service_account_file('credentials.json')
 report_file_path = "vulnerability_scan.txt"
 pdf_report = "CloudSecScanner_Misconfigurations_Report.pdf"
@@ -32,17 +31,26 @@ def main():
 
     # Misconfiguration issues list with criticality
     misconfigs = []
+    project_id = ""
+    location = ""
+    key_path = os.environ["GOOGLE_APPLICATION_CREDENTIALS"]
 
     # Specify the default project ID
-    project_id = "capstone-test-project-450805"
-    location = 'us-east1-b'
+    if key_path:
+        # Load the JSON key file
+        with open(key_path, "r") as file:
+            key_data = json.load(file)
 
-    #initiate_scan_report_file(report_file_path)
+        # Extract project_id and location (if available)
+        project_id = key_data.get("project_id", "Not found")
+
+    location = 'us-east1-b'
 
     try:
         # Open the log file in write mode
         with open(report_file_path, 'w') as report_file:
             # Connect to Google Cloud Storage
+            scan_start_time = time.time()
             gcs_misconfigs = gcp_storage_service.scan_buckets(project_id, report_file)
             misconfigs.extend(gcs_misconfigs)
 
@@ -52,7 +60,12 @@ def main():
 
             # Connect to BigQuery (add your specific logic)
             gbq_misconfigs = gcp_bigquery_service.scan_datasets_and_tables(project_id)
+            scan_end_time = time.time()
             misconfigs.extend(gbq_misconfigs)
+
+            # Calculate the scanning duration
+            scan_time = scan_end_time - scan_start_time
+            print(f"Processing time: {scan_time:.5f} seconds")
 
         # Iterate through each warning and sort by priority
         for misconfig in misconfigs:
@@ -69,19 +82,14 @@ def main():
         # Display the results
         with open(report_file_path, 'w') as report_file:
             print("Misconfiguration Criticality - Summary:")
-            #report_file.write("Severity| Count| Misconfiguration \n")
             for criticality, messages in criticality_summary.items():
                 print(f"{criticality} ({len(messages)} misconfigs):")
-                #report_file.write(f"{criticality} : {len(messages)} :")
                 for msg in messages:
                     print(f"  - {msg}")
-                    #report_file.write(f" {criticality} | {len(messages)} |  - {msg} \n")
                     report_file.write(f" {criticality} |  - {msg}  \n")
 
             print("\nCounts by Criticality: \n")
-            #report_file.write("\n\n\nCounts by Criticality: \n")
             print(criticality_counts)
-            #report_file.write(str(criticality_counts))
 
 
         # Extract data for visualization
@@ -93,7 +101,7 @@ def main():
         # Pie Chart
         plt.figure(figsize=(8, 6))
         plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=140, explode=explode)
-        plt.title(' Misconfigurations by Criticality \n\n')
+        plt.title(' Misconfigurations by Criticality \n\n', fontsize=10)
         #plt.show()
         plt.savefig(criticality_chart, format="png", dpi=300)  # Save as image
         plt.close()
@@ -104,7 +112,7 @@ def main():
 
         # Plot the trends over time
         data.plot(figsize=(10, 6), marker='o')
-        plt.title(" Misconfiguration Trend \n\n")
+        plt.title(" Misconfiguration Trend \n\n", fontsize=10)
         plt.xlabel("Timestamp")
         plt.ylabel("Count")
         plt.grid(True, linestyle='--', alpha=0.6)
@@ -118,7 +126,7 @@ def main():
         print(f"An error occurred: {e}")
 
     charts = [criticality_chart, trend_graph]
-    scan_file_pdf_converter(report_file_path, pdf_report, charts)
+    scan_file_pdf_converter(report_file_path, pdf_report, charts, scan_time, project_id)
 
 if __name__ == "__main__":
     main()
