@@ -5,6 +5,7 @@ google-cloud-compute
 google-cloud-bigquery
 google-cloud-container
 google-cloud-dlp
+google-cloud-asset
 kubernetes
 pyyaml
 tabulate
@@ -12,3 +13,4 @@ colorama
 fpdf
 matplotlib
 csv
+pandas

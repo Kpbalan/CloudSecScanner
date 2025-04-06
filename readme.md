@@ -31,6 +31,8 @@ CloudSec Scanner needs to run as a Service Account that has either "Admin" or eq
     - Kubernetes Engine Cluster Viewer
     - Storage Admin
     - Storage Folder Admin
+    - Cloud Asset Owner
+    - Firewall Recommender Admin
 
 
 ### credentials.json

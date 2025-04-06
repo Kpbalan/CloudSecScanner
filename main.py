@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from google.oauth2 import service_account
 
-from services import gcp_storage_service, gcp_kubernetes_service, gcp_bigquery_service
+from services import gcp_storage_service, gcp_kubernetes_service, gcp_bigquery_service, gcp_network_service
 from utils.helpers import scan_file_pdf_converter, capture_misconfigs_trend_to_csv
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "credentials.json"
@@ -54,15 +54,18 @@ def main():
             gcs_misconfigs = gcp_storage_service.scan_buckets(project_id, report_file)
             misconfigs.extend(gcs_misconfigs)
 
-            # Connect to Google Kubernetes Engine (add your specific logic)
+            # Connect to Google Kubernetes Engine
             gke_misconfigs = gcp_kubernetes_service.scan_kubernetes_clusters(credentials, project_id, location, report_file_path)
             misconfigs.extend(gke_misconfigs)
 
-            # Connect to BigQuery (add your specific logic)
+            # Connect to BigQuery
             gbq_misconfigs = gcp_bigquery_service.scan_datasets_and_tables(project_id)
-            scan_end_time = time.time()
             misconfigs.extend(gbq_misconfigs)
 
+            # Scan Network assets
+            nw_misconfigs = gcp_network_service.scan_network_assets(project_id)
+            misconfigs.extend(nw_misconfigs)
+            scan_end_time = time.time()
             # Calculate the scanning duration
             scan_time = scan_end_time - scan_start_time
             print(f"Processing time: {scan_time:.5f} seconds")
@@ -122,11 +125,11 @@ def main():
         plt.savefig(trend_graph, format="png", dpi=300)  # Save as image
         plt.close()
 
+        charts = [criticality_chart, trend_graph]
+        scan_file_pdf_converter(report_file_path, pdf_report, charts, scan_time, project_id)
+
     except Exception as e:
         print(f"An error occurred: {e}")
-
-    charts = [criticality_chart, trend_graph]
-    scan_file_pdf_converter(report_file_path, pdf_report, charts, scan_time, project_id)
 
 if __name__ == "__main__":
     main()
